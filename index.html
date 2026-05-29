@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boids</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: #f0f0f0;
+            color: #333;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 16px;
+            gap: 16px;
+        }
+
+        h1 {
+            font-size: 1.2em;
+            color: #555;
+            letter-spacing: 2px;
+        }
+
+        #main {
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+        }
+
+        canvas {
+            display: block;
+            background-color: #fff;
+            border: 1px solid #ccc;
+        }
+
+        #panel {
+            width: 220px;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        #panel h2 {
+            font-size: 0.85em;
+            letter-spacing: 1px;
+            color: #888;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 8px;
+        }
+
+        .control {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .control label {
+            font-size: 0.82em;
+            color: #666;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .control label span {
+            color: #333;
+            font-weight: bold;
+        }
+
+        .control input[type="range"] {
+            width: 100%;
+            accent-color: #888;
+        }
+
+        #count-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            padding: 10px 16px;
+            width: 100%;
+            max-width: 1452px;
+        }
+
+        #count-bar label {
+            font-size: 0.85em;
+            color: #666;
+            white-space: nowrap;
+        }
+
+        #count-bar input[type="range"] {
+            flex: 1;
+            accent-color: #888;
+        }
+
+        #count-bar span {
+            font-size: 0.85em;
+            color: #333;
+            font-weight: bold;
+            min-width: 30px;
+            text-align: right;
+        }
+
+        .control>label>span {
+            flex-grow: 1;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <h1>Boids</h1>
+    <div id="main">
+        <canvas id="canvas" width="1200" height="800"></canvas>
+        <div id="panel">
+            <h2>Parameters</h2>
+            <div class="control">
+                <label>Separation distance <span id="val-separation"></span> px</label>
+                <input type="range" id="separation" min="1" max="100">
+            </div>
+            <div class="control">
+                <label>Alignment distance <span id="val-alignment"></span> px</label>
+                <input type="range" id="alignment" min="1" max="100">
+            </div>
+            <div class="control">
+                <label>Speed <span id="val-speed"></span> px/s</label>
+                <input type="range" id="speed" min="1" max="200">
+            </div>
+            <div class="control">
+                <label>Max turn rate <span id="val-turnrate"></span> °/s</label>
+                <input type="range" id="turnrate" min="1" max="360">
+            </div>
+            <div class="control">
+                <label>Turbulence <span id="val-turbulence"></span> ° or px/s</label>
+                <input type="range" id="turbulence" min="0" max="5" step="0.1">
+            </div>
+            <div class="control">
+                <label>Birds <span id="val-count"></span></label>
+                <input type="range" id="count" min="1" max="1000">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const OBSTACLE_RADIUS = 25;
+        const OBSTACLE_CLEARANCE = OBSTACLE_RADIUS + 10;
+        const OBSTACLE_DETECTION_DIST = OBSTACLE_RADIUS * 3;
+        const OBSTACLE_DETECTION_DIST2 = OBSTACLE_DETECTION_DIST * OBSTACLE_DETECTION_DIST;
+
+        // Uniform spatial grid: reduces neighbor queries from O(n²) to O(n)
+        class SpatialGrid {
+            constructor() {
+                this.cols = 0;
+                this.rows = 0;
+                this.cellSize = 0;
+                this.cells = [];
+            }
+
+            // Rebuild the grid from the current boid positions
+            build(boids, cellSize, width, height) {
+                const cols = Math.ceil(width / cellSize);
+                const rows = Math.ceil(height / cellSize);
+                if (cols !== this.cols || rows !== this.rows) {
+                    this.cols = cols;
+                    this.rows = rows;
+                    this.cells = new Array(cols * rows);
+                    for (let i = 0; i < this.cells.length; i++) {
+                        this.cells[i] = [];
+                    }
+                } else {
+                    for (let i = 0; i < this.cells.length; i++) {
+                        this.cells[i].length = 0;
+                    }
+                }
+                this.cellSize = cellSize;
+                for (let i = 0; i < boids.length; i++) {
+                    const col = Math.floor(boids[i].x / cellSize) % cols;
+                    const row = Math.floor(boids[i].y / cellSize) % rows;
+                    this.cells[col + row * cols].push(i);
+                }
+            }
+
+            // Collect candidate boid indices from the 3×3 cell neighborhood (toroidal)
+            query(x, y, result) {
+                result.length = 0;
+                const cx = Math.floor(x / this.cellSize);
+                const cy = Math.floor(y / this.cellSize);
+                const { cols, rows, cells } = this;
+                for (let dr = -1; dr <= 1; dr++) {
+                    for (let dc = -1; dc <= 1; dc++) {
+                        const col = ((cx + dc) % cols + cols) % cols;
+                        const row = ((cy + dr) % rows + rows) % rows;
+                        const cell = cells[col + row * cols];
+                        for (let k = 0; k < cell.length; k++) {
+                            result.push(cell[k]);
+                        }
+                    }
+                }
+            }
+        }
+
+        class Boid {
+            constructor(canvasWidth, canvasHeight, speed) {
+                this.x = Math.random() * canvasWidth;
+                this.y = Math.random() * canvasHeight;
+                this.angle = Math.random() * Math.PI * 2;
+                this.vx = Math.cos(this.angle) * speed;
+                this.vy = Math.sin(this.angle) * speed;
+                this.neighborCount = 0;
+            }
+
+
+
+            // Apply all boid rules and advance position by dt seconds
+            update(boids, grid, obstacles, params, dt, canvasWidth, canvasHeight, candidates) {
+                const halfW = canvasWidth * 0.5;
+                const halfH = canvasHeight * 0.5;
+                // Unit heading vector derived from this.angle (authoritative source of direction)
+                const headCos = Math.cos(this.angle);
+                const headSin = Math.sin(this.angle);
+                const sepDist2 = params.separationDist * params.separationDist;
+                const alignDist2 = params.alignmentDist * params.alignmentDist;
+
+                // Query spatial grid for candidate neighbor indices
+                grid.query(this.x, this.y, candidates);
+
+                // Neighbor analysis: nearest separation violator and alignment average direction
+                let nearestViolDist2 = Infinity, nearestViolDx = 0, nearestViolDy = 0;
+                let alignVx = 0, alignVy = 0, alignCount = 0;
+
+                for (let k = 0; k < candidates.length; k++) {
+                    const other = boids[candidates[k]];
+                    if (other === this) { continue; }
+
+                    // Toroidal distance: branch instead of Math.abs/sign
+                    let dx = this.x - other.x;
+                    let dy = this.y - other.y;
+                    if (dx > halfW) { dx -= canvasWidth; } else if (dx < -halfW) { dx += canvasWidth; }
+                    if (dy > halfH) { dy -= canvasHeight; } else if (dy < -halfH) { dy += canvasHeight; }
+                    const dist2 = dx * dx + dy * dy;
+                    if (dist2 >= alignDist2) { continue; }
+
+                    // Blind cone check via dot product — no atan2, no sqrt
+                    // headCos/headSin form a unit vector, so the threshold simplifies to 0.25 * dist2
+                    // Skip if cos(angle between heading and dir-to-other) < -0.5 (i.e. > 120° behind)
+                    const dot = -dx * headCos - dy * headSin;
+                    if (dot < 0 && dot * dot > 0.25 * dist2) { continue; }
+
+                    if (dist2 < sepDist2 && dist2 > 0 && dist2 < nearestViolDist2) {
+                        nearestViolDist2 = dist2;
+                        nearestViolDx = dx;
+                        nearestViolDy = dy;
+                    }
+
+                    alignVx += other.vx;
+                    alignVy += other.vy;
+                    alignCount++;
+                }
+
+                this.neighborCount = alignCount;
+
+                // Obstacle avoidance: steer tangentially, choosing side with least turn
+                let obstacleTargetAngle = null;
+                let nearestObstDist2 = Infinity;
+                for (const obs of obstacles) {
+                    const odx = obs.x - this.x;
+                    const ody = obs.y - this.y;
+                    const odist2 = odx * odx + ody * ody;
+                    if (odist2 >= OBSTACLE_DETECTION_DIST2) { continue; }
+                    const odist = Math.sqrt(odist2);
+                    const angleToObs = Math.atan2(ody, odx);
+                    let oRelAngle = angleToObs - this.angle;
+                    if (oRelAngle > Math.PI) { oRelAngle -= 2 * Math.PI; }
+                    if (oRelAngle < -Math.PI) { oRelAngle += 2 * Math.PI; }
+                    const perpDist = Math.abs(Math.sin(oRelAngle) * odist);
+                    if (Math.cos(oRelAngle) > 0 && perpDist < OBSTACLE_CLEARANCE && odist2 < nearestObstDist2) {
+                        nearestObstDist2 = odist2;
+                        const avoid1 = angleToObs + Math.PI / 2;
+                        const avoid2 = angleToObs - Math.PI / 2;
+                        let d1 = avoid1 - this.angle;
+                        let d2 = avoid2 - this.angle;
+                        if (d1 > Math.PI) { d1 -= 2 * Math.PI; }
+                        if (d1 < -Math.PI) { d1 += 2 * Math.PI; }
+                        if (d2 > Math.PI) { d2 -= 2 * Math.PI; }
+                        if (d2 < -Math.PI) { d2 += 2 * Math.PI; }
+                        obstacleTargetAngle = Math.abs(d1) <= Math.abs(d2) ? avoid1 : avoid2;
+                    }
+                }
+
+                // Priority-based target angle: obstacle (1) > separation (2) > alignment (3)
+                let targetAngle = this.angle;
+                if (obstacleTargetAngle !== null) {
+                    targetAngle = obstacleTargetAngle;
+                } else if (nearestViolDist2 < Infinity) {
+                    targetAngle = Math.atan2(nearestViolDy, nearestViolDx);
+                } else if (alignCount > 0) {
+                    targetAngle = Math.atan2(alignVy, alignVx);
+                }
+
+                // Clamp angular change to maxTurnRate, then apply jitter
+                let angleDiff = targetAngle - this.angle;
+                if (angleDiff > Math.PI) { angleDiff -= 2 * Math.PI; }
+                if (angleDiff < -Math.PI) { angleDiff += 2 * Math.PI; }
+                const maxTurn = params.maxTurnRate * dt;
+                const angleJitter = (Math.random() * 2 - 1) * params.turbulence;
+                this.angle = (Math.abs(angleDiff) > maxTurn
+                    ? this.angle + Math.sign(angleDiff) * maxTurn
+                    : targetAngle) + angleJitter;
+
+                const speedJitter = (Math.random() * 2 - 1) * params.turbulence;
+                const finalSpeed = Math.max(0, params.speed + speedJitter);
+                this.vx = Math.cos(this.angle) * finalSpeed;
+                this.vy = Math.sin(this.angle) * finalSpeed;
+
+                this.x += this.vx * dt;
+                this.y += this.vy * dt;
+
+                // Toroidal wrapping: teleport to opposite edge when crossing a border
+                if (this.x < 0) { this.x += canvasWidth; }
+                if (this.x >= canvasWidth) { this.x -= canvasWidth; }
+                if (this.y < 0) { this.y += canvasHeight; }
+                if (this.y >= canvasHeight) { this.y -= canvasHeight; }
+            }
+
+            draw(ctx) {
+                const cos = Math.cos(this.angle);
+                const sin = Math.sin(this.angle);
+                const tx = this.x, ty = this.y;
+                const ratio = Math.min(1, this.neighborCount / 10);
+                const lightness = Math.round(204 - ratio * 119);
+
+                // Arrow shape (⮞): manual transform avoids ctx.save/restore overhead
+                // Local points: tip(4,0), top-back(-4,4), notch(-1,0), bottom-back(-4,-4)
+                ctx.beginPath();
+                ctx.moveTo(tx + 4 * cos,                 ty + 4 * sin);
+                ctx.lineTo(tx - 4 * cos - 4 * sin,      ty - 4 * sin + 4 * cos);
+                ctx.lineTo(tx - cos,                     ty - sin);
+                ctx.lineTo(tx - 4 * cos + 4 * sin,      ty - 4 * sin - 4 * cos);
+                ctx.closePath();
+                ctx.fillStyle = "rgb(" + lightness + "," + lightness + "," + lightness + ")";
+                ctx.strokeStyle = "#888";
+                ctx.lineWidth = 1;
+                ctx.fill();
+                ctx.stroke();
+            }
+        }
+
+        class App {
+            constructor() {
+                this.canvas = document.getElementById("canvas");
+                this.ctx = this.canvas.getContext("2d");
+                this.boids = [];
+                this.obstacles = [];
+                this.grid = new SpatialGrid();
+                this._candidates = []; // reused per-boid to avoid allocations
+                this.lastTime = null;
+
+                this.params = {
+                    separationDist: 20,
+                    alignmentDist:  45,
+                    speed:          75,
+                    maxTurnRate:    100 * Math.PI / 180,
+                    turbulence:     1 * Math.PI / 180,
+                    count:          80,
+                };
+
+                this.bindControls();
+                this.resize(this.params.count);
+                this.canvas.addEventListener("click", (e) => {
+                    const rect = this.canvas.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    const hitIndex = this.obstacles.findIndex(
+                        (obs) => Math.hypot(obs.x - x, obs.y - y) <= OBSTACLE_RADIUS
+                    );
+                    if (hitIndex !== -1) {
+                        this.obstacles.splice(hitIndex, 1);
+                    } else {
+                        this.obstacles.push({ x, y });
+                    }
+                });
+                requestAnimationFrame((t) => this.loop(t));
+            }
+
+            bindControls() {
+                const p = this.params;
+                const toDeg = 180 / Math.PI;
+                this.bindRange("separation", "val-separation", p.separationDist,          (v) => { this.params.separationDist = v; });
+                this.bindRange("alignment",  "val-alignment",  p.alignmentDist,            (v) => { this.params.alignmentDist = v; });
+                this.bindRange("speed",      "val-speed",      p.speed,                    (v) => { this.params.speed = v; });
+                this.bindRange("turnrate",   "val-turnrate",   p.maxTurnRate * toDeg,      (v) => { this.params.maxTurnRate = v * Math.PI / 180; });
+                this.bindRange("turbulence", "val-turbulence", p.turbulence * toDeg,       (v) => { this.params.turbulence = v * Math.PI / 180; }, true);
+                this.bindRange("count",      "val-count",      p.count,                    (v) => { this.resize(v); });
+            }
+
+            bindRange(id, labelId, defaultValue, onChange, isFloat = false) {
+                const input = document.getElementById(id);
+                const label = document.getElementById(labelId);
+                input.value = defaultValue;
+                input.addEventListener("input", () => {
+                    const v = isFloat ? parseFloat(input.value) : parseInt(input.value, 10);
+                    label.textContent = isFloat ? v.toFixed(1) : v;
+                    onChange(v);
+                });
+                input.dispatchEvent(new Event("input"));
+            }
+
+            // Adjust the boid list to the target count, adding or removing randomly
+            resize(count) {
+                this.params.count = count;
+                while (this.boids.length < count) {
+                    this.boids.push(new Boid(
+                        this.canvas.width, this.canvas.height,
+                        this.params.speed
+                    ));
+                }
+                if (this.boids.length > count) {
+                    this.boids.splice(count);
+                }
+            }
+
+            loop(timestamp) {
+                if (this.lastTime === null) {
+                    this.lastTime = timestamp;
+                }
+                // Cap dt at 50ms to avoid large position jumps on tab focus restore
+                const dt = Math.min((timestamp - this.lastTime) / 1000, 0.05);
+                this.lastTime = timestamp;
+
+                this.update(dt);
+                this.render();
+
+                requestAnimationFrame((t) => this.loop(t));
+            }
+
+            update(dt) {
+                const { boids, obstacles, params, grid, _candidates } = this;
+                const w = this.canvas.width, h = this.canvas.height;
+                // Cell size >= alignmentDist, capped at min 20 to limit cell count
+                const cellSize = Math.max(params.alignmentDist, 20);
+                grid.build(boids, cellSize, w, h);
+                for (const boid of boids) {
+                    boid.update(boids, grid, obstacles, params, dt, w, h, _candidates);
+                }
+            }
+
+            render() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                for (const obs of this.obstacles) {
+                    this.ctx.beginPath();
+                    this.ctx.arc(obs.x, obs.y, OBSTACLE_RADIUS, 0, Math.PI * 2);
+                    this.ctx.fillStyle = "#4a4";
+                    this.ctx.strokeStyle = "#282";
+                    this.ctx.lineWidth = 1;
+                    this.ctx.fill();
+                    this.ctx.stroke();
+                }
+                for (const boid of this.boids) {
+                    boid.draw(this.ctx);
+                }
+            }
+        }
+
+        const app = new App();
+    </script>
+</body>
+</html>
