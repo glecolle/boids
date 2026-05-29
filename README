@@ -1,0 +1,34 @@
+# Boids
+
+Simulation de vol en nuée (algorithme de Craig Reynolds) en 2D, vue de dessus.
+
+## Utilisation
+
+Ouvrir `index.html` directement dans un navigateur — aucun serveur requis.
+
+## Fonctionnalités
+
+- Canvas 1200×800 px, ~60 fps, monde toroïdal (téléportation bord à bord)
+- Chaque oiseau est représenté par une flèche ⮞ dont la teinte varie du gris clair (isolé) au gris foncé (10+ voisins)
+- **Clic sur le canvas** : place un obstacle circulaire (Ø 50 px) ; reclic dessus pour le supprimer
+- Trois règles de comportement, par priorité : évitement d'obstacle · séparation · alignement
+- Cône aveugle de 120° à l'arrière de chaque oiseau (les voisins derrière sont ignorés)
+
+## Paramètres configurables (panneau latéral)
+
+| Paramètre | Défaut | Plage |
+|---|---|---|
+| Separation distance | 20 px | 1 – 100 px |
+| Alignment distance | 60 px | 1 – 100 px |
+| Speed | 75 px/s | 1 – 200 px/s |
+| Max turn rate | 100 °/s | 1 – 360 °/s |
+| Turbulence | 1 °/px·s | 0 – 5 (pas 0.1) |
+| Birds | 80 | 1 – 1000 |
+
+## Architecture technique
+
+Fichier unique `index.html` (HTML + CSS + JS vanilla, sans dépendance externe).
+
+- **`SpatialGrid`** : grille spatiale uniforme — réduit les requêtes de voisinage de O(n²) à O(n)
+- **`Boid`** : propriétés et comportement de chaque oiseau
+- **`App`** : initialisation, boucle de rendu, gestion des contrôles et des obstacles
