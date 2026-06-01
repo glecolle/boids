@@ -420,6 +420,8 @@
                 this.grid = new SpatialGrid();
                 this._candidates = []; // reused per-boid to avoid allocations
                 this.lastTime = null;
+                this.logicalWidth = 0;
+                this.logicalHeight = 0;
 
                 this.params = {
                     separationDist: 20,
@@ -431,9 +433,8 @@
                 };
 
                 this.bindControls();
-                this.handleResize();
                 window.addEventListener('resize', () => this.handleResize());
-                this.resize(this.params.count);
+
                 this.canvas.addEventListener("click", (e) => {
                     const rect = this.canvas.getBoundingClientRect();
                     const x = e.clientX - rect.left;
@@ -447,10 +448,17 @@
                         this.obstacles.push({ x, y });
                     }
                 });
+
                 document.getElementById("btn-clear-obstacles").addEventListener("click", () => {
                     this.obstacles = [];
                 });
-                requestAnimationFrame((t) => this.loop(t));
+
+                // Defer first resize and init to first frame so DOM is fully laid out
+                requestAnimationFrame((t) => {
+                    this.handleResize();
+                    this.resize(this.params.count);
+                    this.loop(t);
+                });
             }
 
             bindControls() {
@@ -476,13 +484,15 @@
                 input.dispatchEvent(new Event("input"));
             }
 
-            // Sync canvas drawing buffer to its CSS-rendered size
+            // Sync canvas drawing buffer to its CSS-rendered size, accounting for devicePixelRatio
             handleResize() {
+                const dpr = window.devicePixelRatio || 1;
                 const w = this.canvas.offsetWidth;
                 const h = this.canvas.offsetHeight;
-                if (w === this.canvas.width && h === this.canvas.height) { return; }
-                const oldW = this.canvas.width || w;
-                const oldH = this.canvas.height || h;
+                if (w === 0 || h === 0) { return; }
+                if (w === this.logicalWidth && h === this.logicalHeight) { return; }
+                const oldW = this.logicalWidth || w;
+                const oldH = this.logicalHeight || h;
                 const scaleX = w / oldW;
                 const scaleY = h / oldH;
                 for (const boid of this.boids) {
@@ -493,16 +503,21 @@
                     obs.x *= scaleX;
                     obs.y *= scaleY;
                 }
-                this.canvas.width = w;
-                this.canvas.height = h;
+                this.logicalWidth = w;
+                this.logicalHeight = h;
+                this.canvas.width = Math.round(w * dpr);
+                this.canvas.height = Math.round(h * dpr);
+                // Scale context so all drawing commands use logical (CSS) pixel coordinates
+                this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
             }
 
             // Adjust the boid list to the target count, adding or removing randomly
             resize(count) {
                 this.params.count = count;
+                if (this.logicalWidth === 0 || this.logicalHeight === 0) { return; }
                 while (this.boids.length < count) {
                     this.boids.push(new Boid(
-                        this.canvas.width, this.canvas.height,
+                        this.logicalWidth, this.logicalHeight,
                         this.params.speed
                     ));
                 }
@@ -527,7 +542,7 @@
 
             update(dt) {
                 const { boids, obstacles, params, grid, _candidates } = this;
-                const w = this.canvas.width, h = this.canvas.height;
+                const w = this.logicalWidth, h = this.logicalHeight;
                 // Cell size >= alignmentDist, capped at min 20 to limit cell count
                 const cellSize = Math.max(params.alignmentDist, 20);
                 grid.build(boids, cellSize, w, h);
@@ -537,7 +552,7 @@
             }
 
             render() {
-                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this.ctx.clearRect(0, 0, this.logicalWidth, this.logicalHeight);
                 for (const obs of this.obstacles) {
                     this.ctx.beginPath();
                     this.ctx.arc(obs.x, obs.y, OBSTACLE_RADIUS, 0, Math.PI * 2);
