@@ -15,11 +15,7 @@
             background-color: #f0f0f0;
             color: #333;
             font-family: Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 16px;
-            gap: 16px;
+            overflow-x: hidden;
         }
 
         h1 {
@@ -30,18 +26,20 @@
 
         #main {
             display: flex;
-            gap: 16px;
-            align-items: flex-start;
+            flex-direction: column;
         }
 
         canvas {
             display: block;
             background-color: #fff;
             border: 1px solid #ccc;
+            width: 100vw;
+            height: 100vh;
+            flex-shrink: 0;
         }
 
         #panel {
-            width: 220px;
+            width: 100%;
             background-color: #fff;
             border: 1px solid #ccc;
             border-radius: 6px;
@@ -49,6 +47,37 @@
             display: flex;
             flex-direction: column;
             gap: 14px;
+            margin-top: 16px;
+            margin-bottom: 16px;
+        }
+
+        @media (min-width: 1440px) {
+            body {
+                overflow: hidden;
+                height: 100vh;
+            }
+
+            #main {
+                flex-direction: row;
+                height: 100vh;
+            }
+
+            canvas {
+                flex: 1;
+                width: calc( 100vw - 236px );
+                height: 100vh;
+            }
+
+            #panel {
+                width: 220px;
+                flex-shrink: 0;
+                margin-top: 0;
+                margin-bottom: 0;
+                margin-left: 16px;
+                height: 100vh;
+                overflow-y: auto;
+                border-radius: 0;
+            }
         }
 
         #panel h2 {
@@ -113,6 +142,21 @@
             text-align: right;
         }
 
+        #btn-clear-obstacles {
+            width: 100%;
+            padding: 7px 0;
+            font-size: 0.82em;
+            color: #555;
+            background-color: #f5f5f5;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        #btn-clear-obstacles:hover {
+            background-color: #e8e8e8;
+        }
+
         .control>label>span {
             flex-grow: 1;
             text-align: right;
@@ -120,10 +164,10 @@
     </style>
 </head>
 <body>
-    <h1>Boids</h1>
     <div id="main">
-        <canvas id="canvas" width="1200" height="800"></canvas>
+        <canvas id="canvas"></canvas>
         <div id="panel">
+            <h1>Boids</h1>
             <h2>Parameters</h2>
             <div class="control">
                 <label>Separation distance <span id="val-separation"></span> px</label>
@@ -149,6 +193,7 @@
                 <label>Birds <span id="val-count"></span></label>
                 <input type="range" id="count" min="1" max="1000">
             </div>
+            <button id="btn-clear-obstacles">Clear obstacles</button>
         </div>
     </div>
 
@@ -220,8 +265,6 @@
                 this.neighborCount = 0;
             }
 
-
-
             // Apply all boid rules and advance position by dt seconds
             update(boids, grid, obstacles, params, dt, canvasWidth, canvasHeight, candidates) {
                 const halfW = canvasWidth * 0.5;
@@ -235,9 +278,10 @@
                 // Query spatial grid for candidate neighbor indices
                 grid.query(this.x, this.y, candidates);
 
-                // Neighbor analysis: nearest separation violator and alignment average direction
+                // Neighbor analysis: nearest separation violator, alignment average direction, nearest neighbor for cohesion
                 let nearestViolDist2 = Infinity, nearestViolDx = 0, nearestViolDy = 0;
                 let alignVx = 0, alignVy = 0, alignCount = 0;
+                let nearestNeighborDist2 = Infinity, nearestNeighborDx = 0, nearestNeighborDy = 0;
 
                 for (let k = 0; k < candidates.length; k++) {
                     const other = boids[candidates[k]];
@@ -261,6 +305,12 @@
                         nearestViolDist2 = dist2;
                         nearestViolDx = dx;
                         nearestViolDy = dy;
+                    }
+
+                    if (dist2 < nearestNeighborDist2) {
+                        nearestNeighborDist2 = dist2;
+                        nearestNeighborDx = dx;
+                        nearestNeighborDy = dy;
                     }
 
                     alignVx += other.vx;
@@ -298,7 +348,7 @@
                     }
                 }
 
-                // Priority-based target angle: obstacle (1) > separation (2) > alignment (3)
+                // Priority-based target angle: obstacle (1) > separation (2) > alignment (3) > cohesion (4)
                 let targetAngle = this.angle;
                 if (obstacleTargetAngle !== null) {
                     targetAngle = obstacleTargetAngle;
@@ -306,6 +356,9 @@
                     targetAngle = Math.atan2(nearestViolDy, nearestViolDx);
                 } else if (alignCount > 0) {
                     targetAngle = Math.atan2(alignVy, alignVx);
+                } else if (nearestNeighborDist2 > sepDist2 && nearestNeighborDist2 < Infinity) {
+                    // Cohesion: steer toward nearest neighbor (dx/dy point away, so negate)
+                    targetAngle = Math.atan2(-nearestNeighborDy, -nearestNeighborDx);
                 }
 
                 // Clamp angular change to maxTurnRate, then apply jitter
@@ -376,6 +429,8 @@
                 };
 
                 this.bindControls();
+                this.handleResize();
+                window.addEventListener('resize', () => this.handleResize());
                 this.resize(this.params.count);
                 this.canvas.addEventListener("click", (e) => {
                     const rect = this.canvas.getBoundingClientRect();
@@ -390,13 +445,16 @@
                         this.obstacles.push({ x, y });
                     }
                 });
+                document.getElementById("btn-clear-obstacles").addEventListener("click", () => {
+                    this.obstacles = [];
+                });
                 requestAnimationFrame((t) => this.loop(t));
             }
 
             bindControls() {
                 const p = this.params;
                 const toDeg = 180 / Math.PI;
-                this.bindRange("separation", "val-separation", p.separationDist,          (v) => { this.params.separationDist = v; });
+                this.bindRange("separation", "val-separation", p.separationDist,           (v) => { this.params.separationDist = v; });
                 this.bindRange("alignment",  "val-alignment",  p.alignmentDist,            (v) => { this.params.alignmentDist = v; });
                 this.bindRange("speed",      "val-speed",      p.speed,                    (v) => { this.params.speed = v; });
                 this.bindRange("turnrate",   "val-turnrate",   p.maxTurnRate * toDeg,      (v) => { this.params.maxTurnRate = v * Math.PI / 180; });
@@ -414,6 +472,27 @@
                     onChange(v);
                 });
                 input.dispatchEvent(new Event("input"));
+            }
+
+            // Sync canvas drawing buffer to its CSS-rendered size
+            handleResize() {
+                const w = this.canvas.offsetWidth;
+                const h = this.canvas.offsetHeight;
+                if (w === this.canvas.width && h === this.canvas.height) { return; }
+                const oldW = this.canvas.width || w;
+                const oldH = this.canvas.height || h;
+                const scaleX = w / oldW;
+                const scaleY = h / oldH;
+                for (const boid of this.boids) {
+                    boid.x *= scaleX;
+                    boid.y *= scaleY;
+                }
+                for (const obs of this.obstacles) {
+                    obs.x *= scaleX;
+                    obs.y *= scaleY;
+                }
+                this.canvas.width = w;
+                this.canvas.height = h;
             }
 
             // Adjust the boid list to the target count, adding or removing randomly
