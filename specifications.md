@@ -15,15 +15,16 @@ L'application adopte un "responsive" design pour s'afficher convenablement sur l
 On vise un taux de rafraichissement de 60 images par secondes.
 La zone d'affichage des oiseaux est un élement canvas.
 Un panneau de contrôle permet de modifier les paramètres configurables de la simulation.
+Dans tous les cas, le canvas est bordé par 10 pixels.
 
-### Écrans dont la largeur est strictement inférieure à 1440 pixels.
-Le canvas occupe toute la hauteur disponible (100 vh) et toute la largeur disponible (100 vw).
+### Écrans étroits (dont la largeur est strictement inférieure à 1440 pixels)
+Le canvas occupe toute la hauteur disponible (100 vh - 20px) et toute la largeur disponible (100 vw - 20px).
 Le panneau de controle mesure la largeur de l'écran et est accessible en dessous du canvas à l'aide de l'ascenceur. La séparation avec le canvas est de 16px;
 
-### Écrans dont la largeur est supérieure à 1900 pixels.
+### Écrans larges
 
 Le panneau de controle mesure 220 pixels de large et se trouve à droite. La séparation avec le canvas est de 16px;
-Le canvas occupe toute la hauteur disponible (100 vh) et toute la largeur disponible (100vw).
+Le canvas occupe toute la hauteur disponible (100 vh - 20 px) et toute la largeur disponible (100vw - 20 px).
 
 ## Fonctionnel
 
