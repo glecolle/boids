@@ -17,7 +17,9 @@ La zone d'affichage des oiseaux est un élement canvas.
 Un panneau de contrôle permet de modifier les paramètres configurables de la simulation.
 Dans tous les cas, le canvas est bordé par 10 pixels.
 
-### Écrans étroits (dont la largeur est strictement inférieure à 1440 pixels)
+Les écrans étroits sont ceux dont la largeur est strictement inférieure à 1440 pixels, les autres sont qualifiés de larges.
+
+### Écrans étroits
 Le canvas occupe toute la hauteur disponible (100 vh - 20px) et toute la largeur disponible (100 vw - 20px).
 Le panneau de controle mesure la largeur de l'écran et est accessible en dessous du canvas à l'aide de l'ascenceur. La séparation avec le canvas est de 16px;
 
@@ -44,12 +46,12 @@ Chaque oiseau adopte un comportement avec les règles suivantes par priorité :
 - lorsqu'un oiseau traverse sur un bord, il est téléporté sur le bord opposé, le voisinage est donc à prendre en compte de chaque côté des bords quand un oiseau en est à proximité
 - il évite l'obstacle quand il est présent dans son voisinage en déviant sa trajectoire du côté qui demande le moins de déviation, il cherche à laisser au moins 10 pixels de marge entre sa trajectoire et l'obstacle
 - il évite de voler trop près des autres oiseaux (distance minimale configurable dans le panneau de contrôle, 20 px par défaut, de 1 à 100px)
-- il calque progressivement sa direction en fonction des oiseaux se trouvant à moins de 60 pixels de lui (distance de proximité configurable de 1 à 100px) mais ne voit pas les oiseaux dans un cône de 120° derrière lui
+- il calque progressivement sa direction en fonction des oiseaux se trouvant à moins de 45 pixels de lui (distance de proximité configurable de 1 à 100px) mais ne voit pas les oiseaux dans un cône de 120° derrière lui
 - il tend à se rapprocher très légèrement de son plus proche voisin, jusqu'à la distance miniale
 - un facteur turbulence permet de d'ajouter de l'aléa dans la direction et la vitesse, les aleas sont independants pour la vitesse et la direction mais partagent le même maximum configurable (1 degré ou px/s par défaut, entre 0 et 5, par pas de 0.1)
 - l'angle de rotation maximal est configurable en degrés par secondes (1 à 360), par défaut à 100 degrés par seconde.
 
-Le nombre de d'oiseaux affichés doit être configurable avec mise à jour immédiate (min = 1 et max = 1000 oiseaux, 50 par défaut) en ajoutant ou supprimant des oiseaux de la simulation de manière aléatoire.
+Le nombre de d'oiseaux affichés doit être configurable avec mise à jour immédiate (min = 1 et max = 1000 oiseaux, 80 par défaut) en ajoutant ou supprimant des oiseaux de la simulation de manière aléatoire.
 
 ## Codage
 
