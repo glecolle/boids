@@ -496,6 +496,11 @@
             }
 
             loop(timestamp) {
+                if (document.hidden) {
+                    this.lastTime = null;
+                    requestAnimationFrame((t) => this.loop(t));
+                    return;
+                }
                 if (this.lastTime === null) {
                     this.lastTime = timestamp;
                 }

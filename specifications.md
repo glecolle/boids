@@ -12,12 +12,13 @@ Il s'agit d'une application mono page sans serveur contenue dans un unique fichi
 
 L'application utilise un thème clair.
 L'application adopte un "responsive" design pour s'afficher convenablement sur les différentes tailles d'écrans.
-On vise un taux de rafraichissement de 60 images par secondes.
+On vise un taux de rafraichissement de 60 images par secondes. Le calcul des positions et le rendu ne sont pas effectués lorsque l'onglet n'est pas affiché (window.document.hidden == true).
 La zone d'affichage des oiseaux est un élement canvas.
 Un panneau de contrôle permet de modifier les paramètres configurables de la simulation.
 Dans tous les cas, le canvas est bordé par 10 pixels.
 
 Les écrans étroits sont ceux dont la largeur est strictement inférieure à 1440 pixels, les autres sont qualifiés de larges.
+
 
 ### Écrans étroits
 Le canvas occupe toute la hauteur disponible (100 vh - 20px) et toute la largeur disponible (100 vw - 20px).
