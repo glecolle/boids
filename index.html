@@ -362,21 +362,19 @@
                 const sin = Math.sin(this.angle);
                 const tx = this.x, ty = this.y;
                 const ratio = Math.min(1, this.neighborCount / 10);
-                const lightness = Math.round(204 - ratio * 119);
+                const lightness = Math.round(220 - ratio * 190);
 
                 // Arrow shape (⮞): manual transform avoids ctx.save/restore overhead
                 // Local points: tip(4,0), top-back(-4,4), notch(-1,0), bottom-back(-4,-4)
+                const size = 6
                 ctx.beginPath();
-                ctx.moveTo(tx + 4 * cos,                 ty + 4 * sin);
-                ctx.lineTo(tx - 4 * cos - 4 * sin,      ty - 4 * sin + 4 * cos);
+                ctx.moveTo(tx + size * cos,                 ty + size * sin);
+                ctx.lineTo(tx - size * cos - size * sin,      ty - size * sin + size * cos);
                 ctx.lineTo(tx - cos,                     ty - sin);
-                ctx.lineTo(tx - 4 * cos + 4 * sin,      ty - 4 * sin - 4 * cos);
+                ctx.lineTo(tx - size * cos + size * sin,      ty - size * sin - size * cos);
                 ctx.closePath();
                 ctx.fillStyle = "rgb(" + lightness + "," + lightness + "," + lightness + ")";
-                ctx.strokeStyle = "#888";
-                ctx.lineWidth = 1;
                 ctx.fill();
-                ctx.stroke();
             }
         }
 

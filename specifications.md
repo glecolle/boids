@@ -2,7 +2,7 @@
 
 ## Description
 
-Boids est une applicaton permettant de simuler un vol d'oiseaux de manière simplifiée.
+Boids est une application permettant de simuler un vol d'oiseaux de manière simplifiée.
 
 ## Architecture
 
@@ -33,9 +33,10 @@ Le canvas occupe toute la hauteur disponible (100 vh - 20 px) et toute la largeu
 
 Le canvas affiche des mouvements d'oiseaux vus de dessus en 2 dimensions.
 
-Chaque oiseau est représenté par une flèche dont la base est évidée (comme ce caractère : ⮞) de 8 pixels de long dans la direction et le sens de l'oiseau avec les variantes suivantes :
-- la couleur de fond est gris clair (#ccc) pour oiseaux avec 0 voisins
-- la couleur de fond est gris foncé (#555) pour les oiseaux avec 10 voisins ou plus
+Chaque oiseau est représenté par une flèche dont la base est évidée (comme ce caractère : ⮞) de 8 pixels de long dans la direction et le sens de l'oiseau, sans contour, avec les variantes suivantes :
+- la couleur de remplissage est gris très clair (rgb(220, 220, 220)) pour les oiseaux avec 0 voisins
+- la couleur de remplissage est gris très foncé (rgb(30, 30, 30)) pour les oiseaux avec 10 voisins ou plus
+- la luminosité varie linéairement entre ces deux extrêmes en fonction du nombre de voisins
 
 Les oiseaux démarrent à une position aléatoire sur le canvas.
 
